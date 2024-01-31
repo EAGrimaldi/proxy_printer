@@ -1,3 +1,4 @@
 
-scryfall_bulk_data.json
-scryfall_database.json
+*.json
+test_print_out.pdf
+cache/

@@ -4,6 +4,8 @@ import logging
 import datetime
 import os
 import typing
+import fpdf
+import tqdm
 
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
@@ -12,29 +14,34 @@ logging.basicConfig(level=logging.INFO)
 
 log_info = lambda log_msg : logging.log(logging.INFO, log_msg)
 
-class ScryfallDatabase():
+class ProxyPrinter():
     base_uri = "https://api.scryfall.com/"
     bulk_data_file = os.path.join(__location__, "scryfall_bulk_data.json")
     database_file = os.path.join(__location__, "scryfall_database.json")
     bulk_data = None
     database = None
     last_update = None
+    modes = {
+        "simplified",
+        "default",
+    }
     def __init__(self) -> None:
         if os.path.exists(self.bulk_data_file) and os.path.exists(self.database_file):
-            log_info("loading existing database")
+            log_info("found existing database")
             self.load_database()
         else:
             log_info("did not find existing database")
         self.update_database()
     def load_database(self) -> None:
+        log_info("loading existing database...")
         with open(self.bulk_data_file, 'r') as file:
             self.bulk_data = json.load(file)
         with open(self.database_file, 'r') as file:
             self.database = json.load(file)
         self.set_last_update()
+        log_info("load complete")
     def update_database(self) -> None:
         if self.is_out_of_date():
-            logging.warning("database out of date") # should this be in self.is_out_of_date()?
             log_info("updating database...")
             bulk_data_response = requests.get(f"{self.base_uri}bulk-data")
             bulk_data_response.raise_for_status()
@@ -42,7 +49,8 @@ class ScryfallDatabase():
             self.set_last_update()
             success = False
             for bulk_data_item in self.bulk_data["data"]:
-                # NOTE other bulk data options include card art, possibly multiple arts per card name
+                # NOTE "Oracle Cards" has exactly one object for each legal card name
+                # alternatively "Default Cards" has a card object for each printing of each card name
                 if bulk_data_item["name"] == "Oracle Cards":
                     database_response = requests.get(bulk_data_item["download_uri"])
                     database_response.raise_for_status()
@@ -53,27 +61,74 @@ class ScryfallDatabase():
                         json.dump(self.database, file, indent=4)
                     success = True
                     log_info("update complete")
+                    break
             if not success:
-                raise IndexError("bulk data response did not include required bulk data set...")
-        else:
-            log_info("database up-to-date")
+                raise KeyError("bulk data response did not include required bulk data set...")
     def is_out_of_date(self) -> bool:
         if self.last_update is None:
+            logging.warning("did not find record of last update")
             return True
-        return True if (datetime.datetime.now(datetime.timezone.utc) - self.last_update).days > 1 else False
-    def set_last_update(self):
+        if (datetime.datetime.now(datetime.timezone.utc) - self.last_update).days > 0:
+            logging.warning("database out of date")
+            return True
+        log_info("database up to date")
+        return False
+    def set_last_update(self) -> None:
         self.last_update = datetime.datetime.strptime(self.bulk_data["data"][0]["updated_at"], "%Y-%m-%dT%H:%M:%S.%f%z")
-    def get_card(self, card_name: str) -> typing.Union[dict, None]:
+    def get_card_data(self, card_name: str) -> typing.Union[dict, None]:
         for card in self.database:
             if card["name"] == card_name:
                 return card
         logging.warning(f"card name {card_name} not found in database...")
         return None
-
-# TODO
-# - move database to SQL
-# - implement card image assembler        
-# - implement print out formatter
+    def build_card_image(self, card_data, mode) -> str:
+        # TODO implement this
+        raise NotImplementedError("build_card_image() not yet implemented...")
+    def build_print_out(self, card_list: list, mode: str="default") -> None:
+        # TODO implement additional card art selection (low prio)
+        if mode not in self.modes:
+            raise KeyError(f"invalid mode '{mode}' - valid modes are: \n{self.modes}")
+        pdf = fpdf.FPDF("P", "in", "Letter")
+        for i, card_name in enumerate(tqdm.tqdm(card_list, desc="building print out")):
+            card_data = self.get_card_data(card_name)
+            if card_data is None:
+                logging.warning(f"skipping {card_name} in print out...")
+                card_image_file = os.path.join(__location__, "corrupted_key.png") # what a conveniently named card lol
+            else:
+                card_image_file = os.path.join(__location__, "cache", mode, f"{card_name}.png")
+                if not os.path.exists(card_image_file):
+                    if mode == "default":
+                        image_response = requests.get(card_data["image_uris"]["png"])
+                        image_response.raise_for_status()
+                        with open(card_image_file, 'wb') as file:
+                            file.write(image_response.content)
+                    else:
+                        self.build_card_image(card_data, mode)
+            if not i%9:
+                pdf.add_page()
+            x = 0.5 + 2.5 * (i%3)
+            y = 0.25 + 3.5 * (i//3%3)
+            pdf.image(card_image_file, x, y, 2.5, 3.5)
+        pdf.output(os.path.join(__location__, "test_print_out.pdf"), "F")
 
 if __name__ == "__main__":
-    db = ScryfallDatabase()
+    printer = ProxyPrinter()
+    test_list = [
+        "Swords to Plowshares",
+        "Swords to Plowshares",
+        "Swords to Plowshares",
+        "Swords to Plowshares",
+        "Counterspell",
+        "Counterspell",
+        "Counterspell",
+        "Counterspell",
+        "Thoughtseize",
+        "Thoughtseize",
+        "Thoughtseize",
+        "Thoughtseize",
+        "Lightning Bolt",
+        "Lightning Bolt",
+        "Lightning Bolt",
+        "Lightning Bolt",
+    ]
+    printer.build_print_out(test_list)
