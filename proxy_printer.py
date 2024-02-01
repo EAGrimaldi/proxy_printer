@@ -32,6 +32,10 @@ class ProxyPrinter():
         else:
             log_info("did not find existing database")
         self.update_database()
+        for mode in self.modes:
+            mode_cache = os.path.join(__location__, "cache", mode)
+            if not os.path.exists(mode_cache):
+                os.makedirs(mode_cache)
     def load_database(self) -> None:
         log_info("loading existing database...")
         with open(self.bulk_data_file, 'r') as file:
@@ -86,8 +90,10 @@ class ProxyPrinter():
         raise NotImplementedError("build_card_image() not yet implemented...")
     def build_print_out(self, card_list: list, mode: str="default") -> None:
         # TODO implement additional card art selection (low prio)
+        # TODO implement support for TDFCs and MDFCs
         if mode not in self.modes:
-            raise KeyError(f"invalid mode '{mode}' - valid modes are: \n{self.modes}")
+            logging.warning(f"invalid mode '{mode}' - valid modes are: \n{self.modes}")
+            mode = "default"
         pdf = fpdf.FPDF("P", "in", "Letter")
         for i, card_name in enumerate(tqdm.tqdm(card_list, desc="building print out")):
             card_data = self.get_card_data(card_name)
