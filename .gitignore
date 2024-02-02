@@ -1,5 +1,5 @@
 
 *.json
-test.txt
-test.pdf
+*.txt
+*.pdf
 cache/
