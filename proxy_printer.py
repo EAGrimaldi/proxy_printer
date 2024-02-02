@@ -23,6 +23,9 @@ class ProxyPrinter():
     last_update = None
     modes = {
         "simplified",
+        "test",
+        "retro",
+        "modern",
         "default",
     }
     def __init__(self) -> None:
@@ -80,10 +83,17 @@ class ProxyPrinter():
     def set_last_update(self) -> None:
         self.last_update = datetime.datetime.strptime(self.bulk_data["data"][0]["updated_at"], "%Y-%m-%dT%H:%M:%S.%f%z")
     def get_card_data(self, card_name: str) -> typing.Union[dict, None]:
+        double_slash_layouts = {
+            "transform",
+            "modal_dfc",
+            "flip",
+            "split",
+            "adventure",
+        }
         for card_data in self.database:
             if card_data["name"] == card_name:
                 return card_data
-            if card_data["layout"] in {"transform", "modal_dfc", "flip", "split"}:
+            if card_data["layout"] in double_slash_layouts:
                 if card_data["card_faces"][0]["name"] == card_name:
                     # for the case that users lazily write only "Front Side" and not "Front Side // Back Side"
                     return card_data
@@ -98,6 +108,10 @@ class ProxyPrinter():
             "maybeboard",
             "companion",
             "commander",
+        }
+        dfc_layouts = {
+            "transform",
+            "modal_dfc",
         }
         card_list = []
         if not os.path.exists(card_list_file) and not os.path.dirname(card_list_file):
@@ -114,7 +128,7 @@ class ProxyPrinter():
                     logging.warning(f"skipping {card_name} in print out...\n    this should probably never happen...\n    unless it was an unneeded DFC back face?")
                     continue
                 for _ in range(number_of_copies):
-                    if card_data["layout"] in {"transform", "modal_dfc"}:
+                    if card_data["layout"] in dfc_layouts:
                         card_list.append({
                             "file_name": card_data["card_faces"][0]["name"],
                             "image_uri": card_data["card_faces"][0]["image_uris"]["png"],
@@ -140,6 +154,17 @@ class ProxyPrinter():
         return card_list
     def build_card_image(self, card_dict: dict, image_file: str, mode: str) -> str:
         # TODO implement this
+        not_implented = {
+            "normal",
+            "transform", "modal_dfc", "meld",
+            "adventure", "split", "split - fuse", "split - aftermath",
+            "saga", "class", "case",
+            "planeswalker", "battle",
+            "leveler", "prototype", "mutate", "flip", # fuck these tbh
+        }
+        layout = card_dict["card_data"]["layout"]
+        if layout in not_implented:
+            raise NotImplementedError(f"layout {layout} not yet implemented...")
         raise NotImplementedError("build_card_image() not yet implemented...")
     def build_print_out(self, card_list_file: str, mode: str="default") -> None:
         # TODO implement additional card art selection (low prio)
@@ -165,7 +190,9 @@ class ProxyPrinter():
             x = 0.5 + 2.5 * (i%3)
             y = 0.25 + 3.5 * (i//3%3)
             pdf.image(image_file, x, y, 2.5, 3.5)
+        log_info("saving print out...")
         pdf.output(os.path.join(__location__, f"{card_list_file.split('.')[0]}.pdf"), "F")
+        log_info("print out complete")
 
 if __name__ == "__main__":
     printer = ProxyPrinter()
