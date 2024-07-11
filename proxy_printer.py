@@ -125,7 +125,7 @@ class ProxyPrinter():
                 number_of_copies = int(number_of_copies)
                 card_data = self.get_card_data(card_name)
                 if card_data is None:
-                    logging.warning(f"skipping {card_name} in print out...\n    this should probably never happen...\n    unless it was an unneeded DFC back face?")
+                    logging.warning(f"skipping {card_name} in print out...\n    this should probably never happen...\n    unless it was an improper DFC back face?")
                     continue
                 for _ in range(number_of_copies):
                     if card_data["layout"] in dfc_layouts:
@@ -174,7 +174,7 @@ class ProxyPrinter():
         card_list = self.parse_card_list(card_list_file)
         pdf = fpdf.FPDF("P", "in", "Letter")
         for i, card_dict in enumerate(tqdm.tqdm(card_list, desc="building print out")):
-            file_name = card_dict["file_name"]
+            file_name = card_dict["file_name"].replace('"', "'") # shoutout to Henzie "Toolbox" Torre...
             image_uri = card_dict["image_uri"]
             image_file = os.path.join(__location__, "cache", mode, f"{file_name}.png")
             if not os.path.exists(image_file):
@@ -196,4 +196,4 @@ class ProxyPrinter():
 
 if __name__ == "__main__":
     printer = ProxyPrinter()
-    printer.build_print_out("test.txt")
+    printer.build_print_out("printme.txt")
